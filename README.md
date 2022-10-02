@@ -24,22 +24,7 @@
 
 
 
-<!-- TABLE OF CONTENTS -->
-<details>
-   <summary>Sumário</summary>
-  <ol>
-    <li>
-      <a href="#about-the-project">Sobre o projeto</a>
-      
-    </li>
-    <li>
-      <a href="#getting-started">Compilar </a>
-      
-    </li>
-    
-   
-    
-  </ol>
+
 </details>
 
 
