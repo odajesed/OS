@@ -14,15 +14,13 @@
 ;;; 			  127.5KB; Max file size overall = 255*512*255 bytes or ~32MB
 ;;; ---------------------------------
 use32
-    db 'bootSect  ','bin',00h,01h,01h,\
-       '2ndstage  ','bin',00h,02h,04h,\
-       'termu16n  ','fnt',00h,06h,04h,\
-       'fileTable ','txt',00h,0Ah,01h,\
-       'kernel    ','bin',00h,0Bh,1Ch,\
-       'calculator','bin',00h,27h,0Dh,\
-       'editor    ','bin',00h,34h,1Dh,\
-       'termu18n  ','fnt',00h,51h,09h,\
-       'testfont  ','fnt',00h,5Ah,04h
+	db 'bootSect  ','bin',00h,01h,01h,\
+    '2ndstage  ','bin',00h,02h,03h,\
+    'testfont  ','fnt',00h,5h,04h,\
+	'kernel    ','bin',00h,09h,0Eh,\
+	'fileTable ','txt',00h,17h,01h,\
+	'calculator','bin',00h,18h,05h,\
+	'editor    ','bin',00h,1Dh,0Fh
 
         ;; Sector padding magic!
         times 512-($-$$) db 0       ; pad rest of sector out with 0s

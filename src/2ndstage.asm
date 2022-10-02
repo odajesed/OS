@@ -4,98 +4,12 @@
 use16
     org 7E00h       ; 512 bytes after the bootsector in memory
 
-    xor ax, ax
-    mov es, ax      ; ES = 0, because ES:DI will be used for memory map and VBE
-
-    ;; Get physical memory map BIOS int 15h EAX E820h
-    ;; ES:DI points to buffer of 24 byte entries
-    ;; BP will = number of total entries
-    memmap_entries equ 0x8500       ; Store number of memory map entries here
-    get_memory_map:
-        mov di, 0x8504              ; Memory map entries start here
-        xor ebx, ebx                ; EBX = 0 to start, will contain continuation values
-        xor bp, bp                  ; BP will store the number of entries
-        mov edx, 'PAMS'             ; EDX = 'SMAP' but little endian
-        mov eax, 0E820h             ; bios interrupt function number
-        mov [ES:DI+20], dword 1     ; Force a valid ACPI 3.x entry
-        mov ecx, 24                 ; Each entry can be up to 24 bytes
-        int 15h                     ; Call the interrupt
-        jc .error                   ; If carry is set, function not supported or errored
-
-        cmp eax, 'PAMS'             ; EAX should equal 'SMAP' on successful call
-        jne .error
-        test ebx, ebx               ; Does EBX = 0? if so only 1 entry or no entries :(
-        jz .error
-        jmp .start                  ; EBX != 0, have a valid entry
-
-    .next_entry:
-        mov edx, 'PAMS'             ; Some BIOS may clobber edx, reset it here
-        mov ecx, 24                 ; Reset ECX
-        mov eax, 0E820h             ; Reset EAX
-        int 15h
-
-    .start:
-        jcxz .skip_entry            ; Memory map entry is 0 bytes in length, skip
-        mov ecx, [ES:DI+8]          ; Low 32 bits of length
-        or ecx, [ES:DI+12]          ; Or with high 32 bits of length, or will also set the ZF
-        jz .skip_entry              ; Length of memory region returned = 0, skip
-        
-    .good_entry:
-        inc bp                      ; Increment number of entries
-        add di, 24
-
-    .skip_entry:
-        test ebx, ebx               ; If EBX != 0, still have entries to read 
-        jz .done
-        jmp .next_entry
-
-    .error:
-        stc
-        jmp input_gfx_values
-    .done:
-        mov [memmap_entries], bp    ; Store # of memory map entries when done
-        clc
-
-    ;; User input x/y resolution and bpp values
-    input_gfx_values:
-        xor ecx, ecx
-        cmp word [width], 0  ;; Already has values set, skip
-        jne set_up_vbe
-
-        mov si, choose_gfx_string
-        mov cx, choose_gfx_string.len
-        call print_string
-
-        mov si, width_string
-        mov cx, width_string.len
-        call print_string
-
-        call input_number
-
-        mov [width], bx
-
-        mov si, height_string
-        mov cx, height_string.len
-        call print_string
-
-        call input_number
-
-        mov [height], bx
-
-        mov si, bpp_string
-        mov cx, bpp_string.len
-        call print_string
-
-        call input_number
-
-        mov [bpp], bl   
+    mov [loader_drivenum], dl
 
     ;; Set up vbe info structure
-    set_up_vbe:
     xor ax, ax
-    mov es, ax  ; Reset ES to 0
-
-    mov ax, 4F00h
+    mov es, ax
+    mov ah, 4Fh
     mov di, vbe_info_block
     int 10h
 
@@ -129,6 +43,25 @@ use16
         cmp ax, 4Fh
         jne error
 
+        ;; Print out mode values...
+        mov dx, [mode_info_block.x_resolution]	
+        call print_hex	; Print width
+        mov ax, 0E20h	; Print a space
+        int 10h
+
+        mov dx, [mode_info_block.y_resolution]
+        call print_hex	; Print height
+        mov ax, 0E20h   ; Print a space
+        int 10h
+
+        xor dh, dh
+        mov dl, [mode_info_block.bits_per_pixel]
+        call print_hex	; Print bpp
+        mov ax, 0E0Ah	; Print a newline
+        int 10h
+        mov al, 0Dh
+        int 10h
+
         ;; Compare values with desired values
         mov ax, [width]
         cmp ax, [mode_info_block.x_resolution]
@@ -138,9 +71,13 @@ use16
         cmp ax, [mode_info_block.y_resolution]
         jne .next_mode
 
-        mov al, [bpp]
+        mov ax, [bpp]
         cmp al, [mode_info_block.bits_per_pixel]
         jne .next_mode
+
+        ;; Uncomment these to verify correct width/height/bpp values
+;;    	cli
+;;    	hlt
 
         mov ax, 4F02h	; Set VBE mode
         mov bx, [mode]
@@ -166,31 +103,10 @@ use16
         hlt
 
     end_of_modes:
-        mov si, mode_not_found_string
-        mov cx, mode_not_found_string.len
-        call print_string
-        .try_again:
-        xor ax, ax
-        int 16h
-        cmp al, 'y'
-        jne .check_no
-        mov word [width], 0
-        mov word [height], 0
-        mov word [bpp], 0
-
-        mov ax, 0E0Ah       ; Print newline
+        mov ax, 0E4Eh	; Print 'N'
         int 10h
-        mov al, 0Dh
-        int 10h
-        jmp input_gfx_values
-
-        .check_no:
-        cmp al, 'n'
-        jne .try_again
-        mov word [width], 1920      ; Take default values
-        mov word [height], 1080
-        mov byte [bpp], 32 
-        jmp set_up_vbe 
+        cli
+        hlt
 
     ;; print_hex: Suboutine to print a hex string
     print_hex:
@@ -207,51 +123,13 @@ use16
         loop .hex_loop 
 
         mov si, hexString             ; Print out hex string
+        mov ah, 0Eh
         mov cx, 6                     ; Length of string
-
-    ;; print_string: Subroutine to print a string
-    ;;  Inputs:
-    ;;  SI = address of string
-    ;;  CX = length of string
-    print_string:
-        mov ah, 0Eh     ; BIOS teletype output
         .loop:
             lodsb
             int 10h
         loop .loop
         ret
-
-    ;; input_number: Subroutine to input a number
-    ;; Outputs:
-    ;;   BX = number
-    input_number:
-        xor bx, bx
-        mov cx, 10
-        .next_digit:
-            mov ah, 0
-            int 16h         ; BIOS get keystroke, AH = scancode, AL = ascii char
-            mov ah, 0Eh
-            int 10h         ; BIOS teletype output
-
-            cmp al, 08h
-            jne .check_enter
-            mov ax, bx
-            xor dx, dx
-            div cx          ; DX:AX / CX, AX = quotient, DX = remainder
-            mov bx, ax
-            jmp .next_digit
-
-            .check_enter:
-            cmp al, 0Dh     ; Enter key
-            je .done
-            sub al, '0'     ; Convert ascii number to integer
-            mov ah, 0       ; Isolate AL value
-            imul bx, bx, 10 ; BX *= 10
-            add bx, ax      ; BX += AL
-        jmp .next_digit
-
-        .done:
-            ret
 
     ;; Set up GDT
     GDT_start:
@@ -283,6 +161,7 @@ use16
     dd GDT_start
 
     load_GDT:
+    mov dl, [loader_drivenum]
     cli             ; Clear interrupts first
     lgdt [GDT_Desc] ; Load the GDT to the cpu
 
@@ -303,39 +182,29 @@ use32                    ; We are officially in 32 bit mode now
     mov esp, 090000h	    ; Set up stack pointer
 
     ;; Set up VBE mode info block in memory to be easier to work with
+    ;; 5000h memory location
     mov esi, mode_info_block
-    mov edi, 9000h
+    mov edi, 5000h
     mov ecx, 64                 ; Mode info block is 256 bytes / 4 = # of dbl words
     rep movsd
 
     jmp 08h:2000h              ; Jump to kernel
 
 ;; DATA AREA
+loader_drivenum: db 0
 hexString: db '0x0000'
 hex_to_ascii: db '0123456789ABCDEF'
 
-;; String constants and length values
-choose_gfx_string: db 'Input graphics mode values'
-.len = ($-choose_gfx_string)    ;; Fasm needs '=' to set numeric constants
-width_string: db 0Ah,0Dh,'X_Resolution: '
-.len = ($-width_string)    ;; Fasm needs '=' to set numeric constants
-height_string: db 0Ah,0Dh,'Y_Resolution: '
-.len = ($-height_string)    ;; Fasm needs '=' to set numeric constants
-bpp_string: db 0Ah,0Dh,'bpp: '
-.len = ($-bpp_string)    ;; Fasm needs '=' to set numeric constants
-mode_not_found_string: db 0Ah,0Dh,'Video mode not found, try again (Y) or take default 1920x1080 32bpp (N): '
-.len = ($-mode_not_found_string)
-
 ;; VBE Variables
-width: dw 0
-height: dw 0
-bpp: db 0
+width: dw 1920
+height: dw 1080
+bpp: db 32
 offset: dw 0
 t_segment: dw 0	; "segment" is keyword in fasm
 mode: dw 0
 
 ;; End normal 2ndstage bootloader sector padding
-times 1024-($-$$) db 0
+times 512-($-$$) db 0
 
 vbe_info_block:		; 'Sector' 2
 	.vbe_signature: db 'VBE2'
@@ -409,4 +278,4 @@ mode_info_block:	; 'Sector' 3
     .reserved4: times 190 db 0      ; Remainder of mode info block
 
     ;; Sector padding
-    times 2048-($-$$) db 0
+    times 1536-($-$$) db 0
