@@ -598,7 +598,7 @@ SPACE equ 20h	; ASCII space character
 
 ;; REGULAR VARIABLES
 menuString: db '--------------------------------------------------',nl,\
-        'Kernel Booted, Welcome to QuesOS - 32 Bit Edition!',nl,\
+        'Bem vindo ao odOS - 32 Bit Edition!',nl,\
         '--------------------------------------------------',nl,nl,0
 prompt:	db '>:',0
 	
