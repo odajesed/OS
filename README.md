@@ -14,10 +14,10 @@
     <img src="src/img/Captura de tela de 2022-10-02 16-45-38.png" alt="Minha OS" width="80" height="80">
   </a>
 
-  <h3 align="center">Minha OS de hobby</h3>
+  <h3 align="center">Minha OS de hobby ( AINDA EM PROGRESSO... )</h3>
 
   <p align="center">
-    100% escrita em Assembly!
+    100% escrita em Assembly ( por enquanto )!
     
     
 </div>
